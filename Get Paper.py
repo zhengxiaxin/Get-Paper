@@ -59,6 +59,7 @@ class Futures:
             'Brent_ICE': 'Brent',
             'JKM_Platts': 'JKM',
             'WTI_Nymex': 'WTI',
+            'NG_Henry Hub': 'HH',
         }
         self.df = self.df.replace(trans)
 
@@ -101,23 +102,45 @@ class Options:
                                                 format="%b/%d/%Y")  # 到期日改为datetime格式
         return self.df
 
-    def get_keyword(self):
+    @property
+    def get_line(self):
+        line: int = len(self.df['Month'])
+        print('行数', line)
+        return line
+
+    def get_space(self, line):
+        self.sp = {'space': [' '] * line}
+        self.sp = pd.DataFrame(self.sp)  # 创建空格列
+        print('空格', self.sp)
+        return self.sp
+
+    def get_description(self, sp):
         trans = {  # 定义替换内容
             'WTI_Nymex': 'NYMEX Light Sweet Crude Oil Options Electronic',
             'Brent_ICE': 'ICE Brent Crude Oil Options',
             'TTF_ICE': 'ICE Endex Endex Dutch TTF Natural Gas Options',
         }
         self.df = self.df.replace(trans)
-        self.df = self.df[['Month', 'Strike Price', 'P/C', 'Commodity']]
-        self.df['Strike Price'] = self.df['Strike Price'].round(decimals=0)
-        self.df['Strike Price'] = self.df['Strike Price'].astype('str')
-        self.df['Strike Price'] = self.df['Strike Price'].str.replace('0', '0.00')
-        space: int = len(self.df['Month'])
-        print('行数', space)
-        space: str = {'space': [['']*space]}
-        print('空格', space)
-        self.df['keyword'] = self.df['Month'] + self.df['Strike Price'] + self.df['P/C'] + self.df['Commodity']
 
+        self.df = self.df[['Month', 'Strike Price', 'P/C', 'Commodity']]
+
+        self.df['Strike Price'] = self.df['Strike Price'].round(decimals=0)
+        self.df['Strike Price'] = self.df['Strike Price'].astype(str)
+        self.df['Strike Price'] = self.df['Strike Price'].str.replace('0', '0.00')
+
+        self.df['Description'] = self.df['Month'] + sp['space'] + self.df['Strike Price'] + sp['space'] + self.df[
+            'P/C'] + sp['space'] + self.df['Commodity']
+        self.df = self.df[['Description']]
+        return self.df
+
+    def insert_columns(self, df1, df2, sp):
+        self.df = pd.concat([df1, df2], axis=1)  # 将Description列并入最后一行
+        self.df = pd.concat([self.df, sp], axis=1)  # 加入空列
+        self.df = self.df[[
+            'Trade Date', 'Trader', 'Booking', 'Description', 'Volume', 'Qty UOM', 'Price', 'Price UOM', 'S.Price UOM',
+            'space', 'space', 'space', 'space', 'space', 'space', 'space', 'space', 'space',  'Expire Date', 'Month',
+            'Commodity'
+        ]]
         return self.df
 
 
@@ -129,7 +152,7 @@ def last_bis_day():
 
 
 def main():
-    # Get Futrues Data
+    # Get FuturesData
 
     df_name: str = 'paper.csv'
     df_path = 'D:/Users/lenovo/Documents/公务/天然气/分析/'
@@ -152,14 +175,14 @@ def main():
         print(df.info())
         print(df.head())
 
-        df_name = 'futures.csv'
+        df_name = 'get_futures.csv'
         df_file: str = df_path + df_name
         print('输出文件路径为:', df_path)
         df.to_csv(df_file)
     else:
         pass
 
-    # Get Options Data
+    # Get OptionsData
     df_name: str = 'option.csv'
 
     df = GetPaper(df_path, df_name)
@@ -170,26 +193,39 @@ def main():
 
     if df.screening_date():
         df = df.screening_book(book='2020 Optimization 1')
-        print(df)
 
         df1 = Options(df)
         df1.rearrange_columns()
         df1.replace()
         df1 = df1.normalize_date()
 
-        print(df1.info())
+        print('df1', df1.info())
         print(df1)
 
         df2 = Options(df)
-        df2 = df2.get_keyword()
+        line = df2.get_line
+        sp = df2.get_space(line=line)
+        df2 = df2.get_description(sp=sp)
 
-        print(df2.info())
+        print('df2', df2.info())
         print(df2)
 
-        '''df2_name = 'keyword.csv'
+        df = Options(df)
+        df = df.insert_columns(df1=df1, df2=df2, sp=sp)
+
+        pd.set_option('display.max_columns', None)
+        print(df.info())
+        print(df)
+
+        '''df2_name = 'description.csv'
         df2_file: str = df_path + df2_name
         print('输出文件路径为:', df_path)
-        df2['keyword'].to_csv(df2_file)'''
+        df2['Description'].to_csv(df2_file)'''
+
+        df1_name = 'get_option.csv'
+        df_file: str = df_path + df1_name
+        print('输出文件路径为:', df_path)
+        df.to_csv(df_file)
     else:
         pass
 
